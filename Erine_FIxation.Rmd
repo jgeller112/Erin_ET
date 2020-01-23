@@ -1,0 +1,154 @@
+---
+title: "ERIN"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(here)
+
+```
+
+You should be able to run through this on the cloud with no problems. Or just download it to your computer. The here package function makes sure paths will not break on different computers.
+
+```{r readdata}
+
+source(here("read_gazedata.R"))
+
+file_list <- list.files (path=here('gazedata'), pattern=".gazedata") # extract the edfs from path
+
+#switch to folder with gaze data
+setwd(here('gazedata'))
+
+
+merge_dataset <- do.call("rbind", lapply(file_list, FUN=function(files){
+    
+    for (i in 1:length(files)){ 
+      if(file.exists(files[i])){
+        message( "now processing:", files[i])
+      }
+    }
+  
+  sub=read_gazedata(files)#fread makes reading in files quick
+  aol=readxl::read_excel(here("VPT_AOIs_explanations_ER.xlsx"))
+  subs=dplyr::left_join(sub, aol)
+  
+#time is not important
+  
+  return(as_tibble(subs))}))
+
+# stip the basename to get the actual subject number to merge with behave data
+```
+
+
+```{r start}
+# use subject number to determine the group  
+#have to strip the basename bc those do not correspond with the excel files
+# use subject number to determine the group    
+split_sub<-merge_dataset %>%
+  dplyr::mutate(subject = map_chr(Basename, function(s) rev(strsplit(s, "-")[[1]][5])))
+
+
+split_grup <- split_sub %>%
+  mutate(subject=as.numeric(as.character(subject)), group=ifelse(subject>200, "ASD", "TD"))
+#read in behav file
+beh<-read_csv(here("VPT_BehavioralData.csv"))
+
+add_beh <- left_join(split_grup,beh) # add the beh data joined by Degree adn subject
+```
+
+```{r range}
+add.numeric <- function(x) (as.numeric(as.character(x))) # trun ranges numeric
+
+# need to split the range values
+
+range_to <- add_beh %>%
+    separate(XnumberTob,sep="-", into=c("rangex1num", "rangex2num")) %>%
+    separate(YnumberTob,sep="-", into=c("rangey1num", "rangey2num"))  %>%
+    separate(XheadTob,sep="-", into=c("rangex1head", "rangex2head")) %>%
+    separate(YheadTob,sep="-", into=c("rangey1head", "rangey2head"))%>%
+    separate(XbodyTob,sep="-", into=c("rangex1body", "rangex2body"))%>%
+    separate(YbodyTob,sep="-", into=c("rangey1body", "rangey2body")) %>%
+    mutate_at(c("rangex1num", "rangex2num", "rangey1num","rangey2num", "rangex1head", "rangex2head", "rangey1head", "rangey2head", "rangex1body", "rangex2body", "rangey1body","rangey2body" ), add.numeric)
+
+# the XnumberTob	YnumberTob	XheadTob	YheadTob	XbodyTob	YbodyTob columns seem to indicate the range X and Y coordinates must fall within to indicate a fixation. I used these ranges to if X falls between X and Y range then they fixated. 
+
+AOIs <- range_to %>%
+  dplyr::group_by(Condition, Time)%>%
+  dplyr::mutate(num_AOI=ifelse(MeanX >= rangex1num &  MeanX <=rangex2num &  MeanY >= rangey1num &  MeanY <= rangey2num, 1, 0), head_AOI=ifelse(MeanX >= rangex1head & MeanX <=rangex2head & MeanY >= rangey1head & MeanY <= rangey2head, 1,0),body_AOI=ifelse(MeanX >= rangex1body & MeanX <=rangex2body & MeanY >= rangey1body & MeanY <= rangey2body, 1, 0))
+
+#The specifics of data organization and aggregation will depend on the design and hypotheses of the specific study. For this example, the fixation locations need to be “gathered” from separate columns into a single column and “NA” values need to be re-coded as not-fixations:
+```
+
+
+```{r gather}
+gaze_obj <- gather(AOIs, 
+                   key = "object", value = "fix", 
+                   num_AOI:body_AOI, factor_key = TRUE) %>%
+  dplyr::mutate(Fix=replace_na(fix, FALSE))
+
+gaze_subj <-gaze_obj %>%
+  group_by(group, Degree, Anthropomorphic, object, accuracy) %>%
+  summarize(sumfix=sum(Fix), meanfix=mean(Fix, na.rm=TRUE)) # fixation
+```
+
+
+```{r plot}
+ggplot(gaze_subj, aes(x=as.factor(Degree), meanfix, group=Anthropomorphic, colour=Anthropomorphic)) + geom_line() + geom_point(size=3, shape=23)+ 
+  facet_grid(accuracy+group~object)  + 
+  theme_gray() +
+   labs(x = "degree",y = "Proportion of Fixations", colour = NULL) +
+  ggplot2::coord_cartesian(ylim = c(0, 1))
+  
+  
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+#' @return a vector of boolean values indicating whether the gaze values fall
+#'   into the AOI at each time point in the trial.
+GetFramesWithGazeInAOI <- function(trial, img_AOI) {
+  x_bounds <- img_AOI$x
+  y_bounds <- img_AOI$y
+
+  # A gaze is in an AOI if both the x and y gazes fall inside its boundaries
+  gaze_in_x_bounds <- CheckLooksInBounds(trial$XMean, x_bounds[1], x_bounds[2])
+  gaze_in_y_bounds <- CheckLooksInBounds(trial$YMean, y_bounds[1], y_bounds[2])
+  gaze_in_aoi <- gaze_in_x_bounds & gaze_in_y_bounds
+  gaze_in_aoi
+}
+
+
+#' Check whether values in a vector each fall between an upper and lower bound
+#'
+#' @keywords internal
+#' @param xs a set of x or y gaze coordinates
+#' @param lower_bound the lower bound of the range to check
+#' @param upper_bound the upper bound of the range to check
+#' @return a vector of boolean values indicating whether each x in \code{xs}
+#'   falls between the lower bound and upper bound (inclusive). \code{NA} values
+#'   in \code{xs} are missing looks so they are reported as \code{FALSE}.
+CheckLooksInBounds <- function(xs, lower_bound, upper_bound) {
+  gaze_in_bounds <- lower_bound <= xs & xs <= upper_bound
+  gaze_in_bounds[is.na(gaze_in_bounds)] <- FALSE
+  gaze_in_bounds
+}
+
+library(dplyr)
+library(stringr)
+
+df <- dataset %>%
+  mutate(outcome = str_match(Basename, '([^-]+)(?:-[^-]+){3}$')[,4])
+df
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
