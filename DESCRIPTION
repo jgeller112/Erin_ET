@@ -11,11 +11,8 @@ Authors@R:
 Description: Compendium description
 License: MIT + file LICENSE
 Depends: 
-    dataRetrieval,
-    dplyr,
     ggplot2,
-    lubridate,
-    tidyr,
-    viridis
+    tidyverse,
+    here
 Encoding: UTF-8
 LazyData: true
