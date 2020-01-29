@@ -11,11 +11,11 @@ library(here)
 
 ```
 
-You should be able to run through this on the cloud with no problems. Or just download it to your computer. The here package function makes sure paths will not break on different computers :)
+You should be able to run through this on the cloud with no problems. Or just download it to your computer. The here package function makes sure paths will not break on different computers.
 
 ```{r readdata}
 
-source(here("analysis_code", "read_gazedata.R"))
+source(here("read_gazedata.R"))
 
 file_list <- list.files (path=here('gazedata'), pattern=".gazedata") # extract the edfs from path
 
@@ -32,7 +32,7 @@ merge_dataset <- do.call("rbind", lapply(file_list, FUN=function(files){
     }
   
   sub=read_gazedata(files)#fread makes reading in files quick
-  aol=readxl::read_excel(here("Data","VPT_AOIs_explanations_ER.xlsx"))
+  aol=readxl::read_excel(here("VPT_AOIs_explanations_ER.xlsx"))
   subs=dplyr::left_join(sub, aol)
   
 #time is not important
@@ -54,7 +54,7 @@ split_sub<-merge_dataset %>%
 split_grup <- split_sub %>%
   mutate(subject=as.numeric(as.character(subject)), group=ifelse(subject>200, "ASD", "TD"))
 #read in behav file
-beh<-read_csv(here("Data", "VPT_BehavioralData.csv"))
+beh<-read_csv(here("VPT_BehavioralData.csv"))
 
 add_beh <- left_join(split_grup,beh) # add the beh data joined by Degree adn subject
 ```
@@ -109,3 +109,46 @@ ggplot(gaze_subj, aes(x=as.factor(Degree), meanfix, group=Anthropomorphic, colou
 
 ## Including Plots
 
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+#' @return a vector of boolean values indicating whether the gaze values fall
+#'   into the AOI at each time point in the trial.
+GetFramesWithGazeInAOI <- function(trial, img_AOI) {
+  x_bounds <- img_AOI$x
+  y_bounds <- img_AOI$y
+
+  # A gaze is in an AOI if both the x and y gazes fall inside its boundaries
+  gaze_in_x_bounds <- CheckLooksInBounds(trial$XMean, x_bounds[1], x_bounds[2])
+  gaze_in_y_bounds <- CheckLooksInBounds(trial$YMean, y_bounds[1], y_bounds[2])
+  gaze_in_aoi <- gaze_in_x_bounds & gaze_in_y_bounds
+  gaze_in_aoi
+}
+
+
+#' Check whether values in a vector each fall between an upper and lower bound
+#'
+#' @keywords internal
+#' @param xs a set of x or y gaze coordinates
+#' @param lower_bound the lower bound of the range to check
+#' @param upper_bound the upper bound of the range to check
+#' @return a vector of boolean values indicating whether each x in \code{xs}
+#'   falls between the lower bound and upper bound (inclusive). \code{NA} values
+#'   in \code{xs} are missing looks so they are reported as \code{FALSE}.
+CheckLooksInBounds <- function(xs, lower_bound, upper_bound) {
+  gaze_in_bounds <- lower_bound <= xs & xs <= upper_bound
+  gaze_in_bounds[is.na(gaze_in_bounds)] <- FALSE
+  gaze_in_bounds
+}
+
+library(dplyr)
+library(stringr)
+
+df <- dataset %>%
+  mutate(outcome = str_match(Basename, '([^-]+)(?:-[^-]+){3}$')[,4])
+df
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
