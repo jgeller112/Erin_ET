@@ -54,9 +54,7 @@ split_sub<-merge_dataset %>%
 split_grup <- split_sub %>%
   mutate(subject=as.numeric(as.character(subject)), group=ifelse(subject>200, "ASD", "TD"))
 #read in behav file
-beh<-read_csv(here("Data", "VPT_BehavioralData.csv"))
 
-add_beh <- left_join(split_grup,beh) # add the beh data joined by Degree adn subject
 ```
 
 ```{r range}
@@ -64,7 +62,7 @@ add.numeric <- function(x) (as.numeric(as.character(x))) # trun ranges numeric
 
 # need to split the range values
 
-range_to <- add_beh %>%
+range_to <- split_grup %>%
     separate(XnumberTob,sep="-", into=c("rangex1num", "rangex2num")) %>%
     separate(YnumberTob,sep="-", into=c("rangey1num", "rangey2num"))  %>%
     separate(XheadTob,sep="-", into=c("rangex1head", "rangex2head")) %>%
